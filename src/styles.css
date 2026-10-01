@@ -756,6 +756,78 @@ a:hover {
   color: #d92d20 !important;
 }
 
+.batch-candidate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px;
+}
+
+.candidate-card {
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+  background: #f7f8fa;
+}
+
+.candidate-card.stale {
+  border-color: #ff7d00;
+  background: #fffaf2;
+}
+
+.candidate-card.applied {
+  border-color: #00b42a;
+  background: #f4fff6;
+}
+
+.candidate-card.failed,
+.candidate-card.skipped {
+  border-color: #d92d20;
+  background: #fff7f6;
+}
+
+.candidate-card.rolled-back {
+  border-style: dashed;
+  border-color: #86909c;
+}
+
+.candidate-flow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.snapshot-hash {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: #4e5969;
+}
+
+.preflight-finding {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #e5e6eb;
+  border-left: 4px solid #86909c;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.preflight-finding.blocker {
+  border-left-color: #d92d20;
+  background: #fffafa;
+}
+
+.preflight-finding.warning {
+  border-left-color: #ff7d00;
+  background: #fffdf8;
+}
+
+.source-toggle .MuiToggleButton-root {
+  padding: 7px 14px;
+  text-transform: none;
+}
+
 @media (max-width: 1280px) {
   .stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

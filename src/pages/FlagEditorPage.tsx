@@ -47,6 +47,7 @@ const emptyFlag = (): FeatureFlag => ({
   regions: ['CN-EAST'],
   minClientVersion: { dev: '1.0.0', staging: '1.0.0', production: '1.0.0' },
   dependencies: [],
+  environmentStates: {},
   rollbackConditions: [],
   metricNames: [],
   deadCodeStatus: 'candidate',

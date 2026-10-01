@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:release-batch": "esbuild scripts/releaseBatch.e2e.ts --bundle --platform=node --format=esm --alias:@=./src --outfile=scripts/.tmp-e2e.mjs --log-level=warning && node scripts/.tmp-e2e.mjs"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

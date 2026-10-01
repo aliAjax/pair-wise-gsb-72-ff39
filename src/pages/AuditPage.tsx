@@ -38,6 +38,14 @@ const actionLabel: Record<string, string> = {
   unfrozen: '解冻',
   'rolled-back': '回滚',
   'rollout-adjusted': '调整灰度',
+  'batch-created': '批次生成',
+  'batch-candidate-stale': '候选失效',
+  'batch-regenerated': '候选重生成',
+  'batch-confirmed': '批次确认',
+  'batch-applied': '候选写入',
+  'batch-halted': '整批停止',
+  'batch-retried': '批次重试',
+  'batch-rolled-back': '批次回滚',
 }
 
 export function AuditPage() {

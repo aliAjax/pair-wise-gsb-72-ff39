@@ -1,17 +1,112 @@
 import type {
   AuditEvent,
+  CandidateSnapshot,
   DashboardData,
+  Environment,
+  EnvironmentState,
   FeatureFlag,
   ImpactIssue,
+  ReleaseBatch,
   ReviewPayload,
 } from '@/types'
 
 const STORAGE_KEY = 'feature-flag-release-console-v1'
+/** 写入失败注入开关：置位后下一次批次写入会模拟失败，用于演示“保留未完成项重试”。 */
+export const BATCH_FAILURE_KEY = 'feature-flag-release-batch-fail-next'
 
 export interface Database {
   flags: FeatureFlag[]
   audit: AuditEvent[]
   issues: ImpactIssue[]
+  batches: ReleaseBatch[]
+}
+
+export const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+
+const ENVIRONMENT_ORDER: Environment[] = ['dev', 'staging', 'production']
+
+/** 由开关顶层字段构造其主环境状态。 */
+export const buildHomeState = (flag: FeatureFlag): EnvironmentState => ({
+  environment: flag.environment,
+  status: flag.status,
+  enabled: flag.enabled,
+  rolloutPercentage: flag.rolloutPercentage,
+  audienceRules: clone(flag.audienceRules),
+  dependencies: clone(flag.dependencies),
+  rolloutSteps: clone(flag.rolloutSteps),
+  minClientVersion: flag.minClientVersion[flag.environment],
+  updatedAt: flag.updatedAt,
+})
+
+/** 目标环境从未发布时的锚点：关闭、0%、空受众/依赖/阶段。 */
+const emptyEnvironmentState = (environment: Environment, minClientVersion: string): EnvironmentState => ({
+  environment,
+  status: 'draft',
+  enabled: false,
+  rolloutPercentage: 0,
+  audienceRules: [],
+  dependencies: [],
+  rolloutSteps: [],
+  minClientVersion,
+  updatedAt: '2026-09-01T00:00:00+08:00',
+})
+
+/** 读取某环境状态，缺失时回退到空锚点（生产从未发布过即属此列）。 */
+export const getEnvironmentState = (
+  flag: FeatureFlag,
+  environment: Environment,
+): EnvironmentState =>
+  flag.environmentStates[environment] ??
+  emptyEnvironmentState(environment, flag.minClientVersion[environment])
+
+/** 把顶层字段同步回主环境，并把各环境最低版本与主记录对齐。 */
+export const syncHomeState = (flag: FeatureFlag): void => {
+  flag.environmentStates[flag.environment] = buildHomeState(flag)
+  ENVIRONMENT_ORDER.forEach((environment) => {
+    const state = flag.environmentStates[environment]
+    if (state) state.minClientVersion = flag.minClientVersion[environment]
+  })
+}
+
+/** 提取批次/回滚关心的候选字段。 */
+export const toCandidateSnapshot = (state: EnvironmentState): CandidateSnapshot => ({
+  audienceRules: clone(state.audienceRules),
+  dependencies: clone(state.dependencies),
+  minClientVersion: state.minClientVersion,
+  rolloutPercentage: state.rolloutPercentage,
+  rolloutSteps: clone(state.rolloutSteps),
+})
+
+/** 兼容历史数据：补齐环境状态与批次表。 */
+const migrateDatabase = (database: Database): Database => {
+  if (!Array.isArray(database.batches)) database.batches = []
+  database.flags.forEach((flag) => {
+    if (!flag.environmentStates) flag.environmentStates = {}
+    if (!flag.environmentStates[flag.environment]) {
+      flag.environmentStates[flag.environment] = buildHomeState(flag)
+    }
+    // 演示数据：极速支付与账单导出在生产有旧锚点，便于呈现来源差异与回滚恢复。
+    if (!flag.environmentStates.production && (flag.id === 'flag-101' || flag.id === 'flag-103')) {
+      flag.environmentStates.production = {
+        ...emptyEnvironmentState('production', flag.minClientVersion.production),
+        audienceRules: clone(
+          flag.id === 'flag-101'
+            ? [
+                {
+                  id: 'r-101-legacy',
+                  attribute: 'client.web',
+                  operator: 'equals',
+                  value: 'true',
+                  negate: false,
+                },
+              ]
+            : flag.audienceRules,
+        ),
+        dependencies: [],
+      }
+    }
+  })
+  return database
 }
 
 const flags: FeatureFlag[] = [
@@ -46,6 +141,28 @@ const flags: FeatureFlag[] = [
       { id: 's-3', percentage: 20, audience: 'iOS 金卡及铂金用户', startedAt: '2026-09-29T09:00:00+08:00', status: 'running', guardrails: ['错误率 < 1.2%', 'P95 < 2200ms'] },
       { id: 's-4', percentage: 50, audience: '全量高价值用户', startedAt: '2026-10-02T10:00:00+08:00', status: 'planned', guardrails: ['人工审批'] },
     ],
+    environmentStates: {
+      dev: {
+        environment: 'dev',
+        status: 'active',
+        enabled: true,
+        rolloutPercentage: 100,
+        audienceRules: [
+          { id: 'r-101-dev-1', attribute: 'user.tier', operator: 'in', value: 'gold,platinum', negate: false },
+          { id: 'r-101-dev-2', attribute: 'client.platform', operator: 'equals', value: 'ios', negate: false },
+          { id: 'r-101-dev-3', attribute: 'account.risk_score', operator: 'lte', value: '40', negate: false },
+        ],
+        dependencies: [
+          { flagId: 'flag-104', type: 'requires', condition: '支付聚合服务已启用' },
+          { flagId: 'flag-108', type: 'conflicts', condition: '旧版优惠券浮层不可同时启用' },
+        ],
+        rolloutSteps: [
+          { id: 's-dev-101', percentage: 100, audience: '全部开发联调流量', startedAt: '2026-09-20T10:00:00+08:00', status: 'completed', guardrails: ['联调环境无阻断错误'] },
+        ],
+        minClientVersion: '8.18.0',
+        updatedAt: '2026-09-24T11:00:00+08:00',
+      },
+    },
     createdAt: '2026-09-12T14:20:00+08:00',
     updatedAt: '2026-09-29T09:05:00+08:00',
     lastChangedBy: '陈思远',
@@ -75,6 +192,7 @@ const flags: FeatureFlag[] = [
       { id: 's-201', percentage: 10, audience: '活跃用户', startedAt: '2026-09-20T10:00:00+08:00', status: 'completed', guardrails: ['CTR 不低于对照 5%'] },
       { id: 's-202', percentage: 35, audience: '活跃及高意图用户', startedAt: '2026-09-27T10:00:00+08:00', status: 'running', guardrails: ['接口超时率 < 2%'] },
     ],
+    environmentStates: {},
     createdAt: '2026-08-28T09:30:00+08:00',
     updatedAt: '2026-09-28T16:40:00+08:00',
     lastChangedBy: '周启',
@@ -102,6 +220,7 @@ const flags: FeatureFlag[] = [
     rolloutSteps: [
       { id: 's-301', percentage: 5, audience: '内部测试企业', startedAt: '2026-10-08T10:00:00+08:00', status: 'planned', guardrails: ['任务成功率 > 98%'] },
     ],
+    environmentStates: {},
     createdAt: '2026-09-18T11:10:00+08:00',
     updatedAt: '2026-09-28T18:20:00+08:00',
     lastChangedBy: '周航',
@@ -125,6 +244,7 @@ const flags: FeatureFlag[] = [
     metricNames: ['payment_router_error_rate'],
     deadCodeStatus: 'clean',
     rolloutSteps: [{ id: 's-401', percentage: 100, audience: '全部用户', startedAt: '2026-07-01T00:00:00+08:00', status: 'completed', guardrails: [] }],
+    environmentStates: {},
     createdAt: '2026-06-12T10:00:00+08:00',
     updatedAt: '2026-09-25T12:30:00+08:00',
     lastChangedBy: '韩秋',
@@ -148,6 +268,7 @@ const flags: FeatureFlag[] = [
     metricNames: ['feature_service_latency', 'feature_cache_hit_rate'],
     deadCodeStatus: 'clean',
     rolloutSteps: [{ id: 's-501', percentage: 60, audience: '推荐服务流量', startedAt: '2026-09-28T09:00:00+08:00', status: 'paused', guardrails: ['观察缓存命中率'] }],
+    environmentStates: {},
     createdAt: '2026-05-18T13:40:00+08:00',
     updatedAt: '2026-09-29T08:50:00+08:00',
     lastChangedBy: '郭宁',
@@ -171,6 +292,7 @@ const flags: FeatureFlag[] = [
     metricNames: ['campaign_editor_save_success'],
     deadCodeStatus: 'confirmed',
     rolloutSteps: [{ id: 's-601', percentage: 20, audience: '华东运营团队', startedAt: '2026-09-27T14:00:00+08:00', status: 'paused', guardrails: [] }],
+    environmentStates: {},
     createdAt: '2026-08-20T10:15:00+08:00',
     updatedAt: '2026-09-28T15:48:00+08:00',
     lastChangedBy: '梁琪',
@@ -194,6 +316,7 @@ const flags: FeatureFlag[] = [
     metricNames: ['queue_backlog', 'task_failure_rate'],
     deadCodeStatus: 'clean',
     rolloutSteps: [{ id: 's-701', percentage: 100, audience: '预发长任务', startedAt: '2026-09-22T09:00:00+08:00', status: 'completed', guardrails: [] }],
+    environmentStates: {},
     createdAt: '2026-08-10T16:20:00+08:00',
     updatedAt: '2026-09-27T11:12:00+08:00',
     lastChangedBy: '赵岚',
@@ -217,6 +340,7 @@ const flags: FeatureFlag[] = [
     metricNames: ['coupon_apply_success_rate'],
     deadCodeStatus: 'confirmed',
     rolloutSteps: [{ id: 's-801', percentage: 12, audience: '低版本客户端', startedAt: '2026-09-20T09:00:00+08:00', status: 'paused', guardrails: [] }],
+    environmentStates: {},
     createdAt: '2025-12-10T09:00:00+08:00',
     updatedAt: '2026-09-29T09:10:00+08:00',
     lastChangedBy: '沈宁',
@@ -367,19 +491,19 @@ const audit: AuditEvent[] = [
   },
 ]
 
-export const seedDatabase = (): Database => ({ flags, audit, issues })
+export const seedDatabase = (): Database => ({ flags, audit, issues, batches: [] })
 
 export const readDatabase = (): Database => {
   const raw = localStorage.getItem(STORAGE_KEY)
   if (!raw) {
-    const seed = seedDatabase()
+    const seed = migrateDatabase(seedDatabase())
     writeDatabase(seed)
     return seed
   }
   try {
-    return JSON.parse(raw) as Database
+    return migrateDatabase(JSON.parse(raw) as Database)
   } catch {
-    const seed = seedDatabase()
+    const seed = migrateDatabase(seedDatabase())
     writeDatabase(seed)
     return seed
   }
@@ -413,6 +537,7 @@ export const applyReview = (flagId: string, payload: ReviewPayload): FeatureFlag
   if (payload.freezeUntil && payload.decision === 'approved') {
     flag.rollbackConditions.push(`冻结至 ${payload.freezeUntil}，期间禁止扩大流量`)
   }
+  syncHomeState(flag)
   writeDatabase(db)
   return flag
 }
@@ -430,6 +555,7 @@ export const rollbackFlag = (flagId: string, actor: string, reason: string): Fea
   flag.rolloutSteps.forEach((step) => {
     if (step.status === 'running') step.status = 'paused'
   })
+  syncHomeState(flag)
   db.audit.unshift({
     id: `audit-${Date.now()}`,
     flagId,
