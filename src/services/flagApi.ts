@@ -6,9 +6,24 @@ import {
   rollbackFlag,
   writeDatabase,
 } from '@/services/database'
+import {
+  applyReleaseBatch,
+  armNextWriteFailure,
+  confirmReleaseBatch,
+  createReleaseBatch,
+  getReleaseOverview,
+  refreshBatchFreshness,
+  regenerateBatchCandidates,
+  retryReleaseBatch,
+  rollbackReleaseBatch,
+  saveEnvBaseline,
+  simulateSourceDrift,
+  type ReleaseOverview,
+} from '@/services/releaseBatches'
 import type {
   AuditEvent,
   DashboardData,
+  Environment,
   FeatureFlag,
   FlagFilter,
   ImpactIssue,
@@ -21,7 +36,7 @@ const delay = (milliseconds = 180) =>
 export const flagApi = createApi({
   reducerPath: 'flagApi',
   baseQuery: fakeBaseQuery<{ message: string }>(),
-  tagTypes: ['Flags', 'Flag', 'Issues', 'Audit', 'Dashboard'],
+  tagTypes: ['Flags', 'Flag', 'Issues', 'Audit', 'Dashboard', 'ReleaseBatches'],
   endpoints: (builder) => ({
     getDashboard: builder.query<DashboardData, void>({
       async queryFn() {
@@ -184,6 +199,132 @@ export const flagApi = createApi({
       },
       providesTags: ['Audit'],
     }),
+    getReleaseOverview: builder.query<ReleaseOverview, void>({
+      async queryFn() {
+        await delay()
+        return { data: getReleaseOverview() }
+      },
+      providesTags: ['ReleaseBatches'],
+    }),
+    refreshBatchFreshness: builder.mutation<unknown, string>({
+      async queryFn(batchId) {
+        try {
+          refreshBatchFreshness(batchId)
+          return { data: null }
+        } catch (error) {
+          return { error: { message: error instanceof Error ? error.message : '候选校验失败' } }
+        }
+      },
+      invalidatesTags: ['ReleaseBatches'],
+    }),
+    createReleaseBatch: builder.mutation<
+      ReturnType<typeof createReleaseBatch>,
+      { flagId: string; targets: Environment[]; actor: string }
+    >({
+      async queryFn(input) {
+        await delay(260)
+        try {
+          return { data: createReleaseBatch(input) }
+        } catch (error) {
+          return { error: { message: error instanceof Error ? error.message : '创建批次失败' } }
+        }
+      },
+      invalidatesTags: ['ReleaseBatches', 'Audit'],
+    }),
+    regenerateBatchCandidates: builder.mutation<unknown, { batchId: string; actor: string }>({
+      async queryFn({ batchId, actor }) {
+        await delay(220)
+        try {
+          regenerateBatchCandidates(batchId, actor)
+          return { data: null }
+        } catch (error) {
+          return { error: { message: error instanceof Error ? error.message : '重新生成失败' } }
+        }
+      },
+      invalidatesTags: ['ReleaseBatches', 'Audit'],
+    }),
+    confirmReleaseBatch: builder.mutation<unknown, { batchId: string; actor: string }>({
+      async queryFn({ batchId, actor }) {
+        await delay(260)
+        try {
+          confirmReleaseBatch(batchId, actor)
+          return { data: null }
+        } catch (error) {
+          return { error: { message: error instanceof Error ? error.message : '确认批次失败' } }
+        }
+      },
+      invalidatesTags: ['ReleaseBatches', 'Audit'],
+    }),
+    applyReleaseBatch: builder.mutation<unknown, { batchId: string; actor: string }>({
+      async queryFn({ batchId, actor }) {
+        await delay(320)
+        try {
+          applyReleaseBatch(batchId, actor)
+          return { data: null }
+        } catch (error) {
+          return { error: { message: error instanceof Error ? error.message : '执行批次失败' } }
+        }
+      },
+      invalidatesTags: ['ReleaseBatches', 'Flags', 'Flag', 'Dashboard', 'Audit'],
+    }),
+    retryReleaseBatch: builder.mutation<unknown, { batchId: string; actor: string }>({
+      async queryFn({ batchId, actor }) {
+        await delay(320)
+        try {
+          retryReleaseBatch(batchId, actor)
+          return { data: null }
+        } catch (error) {
+          return { error: { message: error instanceof Error ? error.message : '批次重试失败' } }
+        }
+      },
+      invalidatesTags: ['ReleaseBatches', 'Flags', 'Flag', 'Dashboard', 'Audit'],
+    }),
+    rollbackReleaseBatch: builder.mutation<
+      unknown,
+      { batchId: string; actor: string; reason: string }
+    >({
+      async queryFn({ batchId, actor, reason }) {
+        await delay(320)
+        try {
+          rollbackReleaseBatch(batchId, actor, reason)
+          return { data: null }
+        } catch (error) {
+          return { error: { message: error instanceof Error ? error.message : '整批回滚失败' } }
+        }
+      },
+      invalidatesTags: ['ReleaseBatches', 'Flags', 'Flag', 'Dashboard', 'Audit'],
+    }),
+    simulateSourceDrift: builder.mutation<unknown, { flagId: string; actor: string }>({
+      async queryFn({ flagId, actor }) {
+        await delay(200)
+        try {
+          simulateSourceDrift(flagId, actor)
+          return { data: null }
+        } catch (error) {
+          return { error: { message: error instanceof Error ? error.message : '模拟来源变化失败' } }
+        }
+      },
+      invalidatesTags: ['ReleaseBatches', 'Flags', 'Flag', 'Audit'],
+    }),
+    saveEnvBaseline: builder.mutation<unknown, { environment: Environment; version: string }>({
+      async queryFn({ environment, version }) {
+        await delay(180)
+        try {
+          saveEnvBaseline(environment, version)
+          return { data: null }
+        } catch (error) {
+          return { error: { message: error instanceof Error ? error.message : '基线更新失败' } }
+        }
+      },
+      invalidatesTags: ['ReleaseBatches', 'Audit'],
+    }),
+    armWriteFailure: builder.mutation<unknown, void>({
+      async queryFn() {
+        armNextWriteFailure()
+        return { data: null }
+      },
+      invalidatesTags: ['ReleaseBatches'],
+    }),
   }),
 })
 
@@ -197,4 +338,15 @@ export const {
   useRollbackFlagMutation,
   useGetIssuesQuery,
   useGetAuditQuery,
+  useGetReleaseOverviewQuery,
+  useRefreshBatchFreshnessMutation,
+  useCreateReleaseBatchMutation,
+  useRegenerateBatchCandidatesMutation,
+  useConfirmReleaseBatchMutation,
+  useApplyReleaseBatchMutation,
+  useRetryReleaseBatchMutation,
+  useRollbackReleaseBatchMutation,
+  useSimulateSourceDriftMutation,
+  useSaveEnvBaselineMutation,
+  useArmWriteFailureMutation,
 } = flagApi

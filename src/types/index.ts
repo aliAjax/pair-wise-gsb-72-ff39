@@ -60,6 +60,7 @@ export interface AuditEvent {
   id: string
   flagId: string
   flagKey: string
+  batchId?: string
   action:
     | 'created'
     | 'updated'
@@ -70,6 +71,13 @@ export interface AuditEvent {
     | 'unfrozen'
     | 'rolled-back'
     | 'rollout-adjusted'
+    | 'batch-created'
+    | 'batch-confirmed'
+    | 'batch-applied'
+    | 'batch-halted'
+    | 'batch-retried'
+    | 'batch-superseded'
+    | 'batch-rolled-back'
   actor: string
   summary: string
   before?: string
@@ -112,4 +120,76 @@ export interface ReviewPayload {
   decision: 'approved' | 'rejected'
   comment: string
   freezeUntil?: string
+}
+
+export type BatchStatus =
+  | 'draft'
+  | 'confirmed'
+  | 'applied'
+  | 'halted'
+  | 'rolled-back'
+  | 'superseded'
+
+export type BatchCandidateStatus =
+  | 'pending'
+  | 'applied'
+  | 'failed'
+  | 'invalidated'
+  | 'skipped'
+  | 'rolled-back'
+
+export type BatchGateCode =
+  | 'stale-source'
+  | 'environment-order'
+  | 'dependency-rolled-back'
+  | 'dependency-disabled'
+  | 'dependency-missing'
+  | 'version-unsatisfied'
+
+export interface CandidateSnapshot {
+  audienceRules: AudienceRule[]
+  dependencies: Dependency[]
+  minClientVersion: string
+  rolloutSteps: RolloutStep[]
+  rolloutPercentage: number
+  sourceFingerprint: string
+}
+
+export interface BatchRestorePoint {
+  audienceRules: AudienceRule[]
+  dependencies: Dependency[]
+  rolloutSteps: RolloutStep[]
+  targetExisted: boolean
+}
+
+export interface BatchCandidate {
+  id: string
+  sourceEnvironment: Environment
+  targetEnvironment: Environment
+  status: BatchCandidateStatus
+  snapshot: CandidateSnapshot
+  restorePoint?: BatchRestorePoint
+  targetFlagId: string
+  blockingCode?: BatchGateCode
+  blockingDetail?: string
+  appliedAt?: string
+}
+
+export interface ReleaseBatch {
+  id: string
+  flagId: string
+  flagKey: string
+  flagName: string
+  status: BatchStatus
+  createdBy: string
+  createdAt: string
+  confirmedAt?: string
+  confirmedBy?: string
+  appliedAt?: string
+  haltedAt?: string
+  rollbackAt?: string
+  rollbackBy?: string
+  rollbackReason?: string
+  candidates: BatchCandidate[]
+  note?: string
 }

@@ -6,6 +6,7 @@ import { FlagEditorPage } from '@/pages/FlagEditorPage'
 import { ReviewPage } from '@/pages/ReviewPage'
 import { DependenciesPage } from '@/pages/DependenciesPage'
 import { RolloutPage } from '@/pages/RolloutPage'
+import { ReleaseBatchesPage } from '@/pages/ReleaseBatchesPage'
 import { AuditPage } from '@/pages/AuditPage'
 import { ReportsPage } from '@/pages/ReportsPage'
 
@@ -21,6 +22,7 @@ export const router = createBrowserRouter([
       { path: 'review', element: <ReviewPage /> },
       { path: 'dependencies', element: <DependenciesPage /> },
       { path: 'rollout', element: <RolloutPage /> },
+      { path: 'batches', element: <ReleaseBatchesPage /> },
       { path: 'audit', element: <AuditPage /> },
       { path: 'reports', element: <ReportsPage /> },
     ],

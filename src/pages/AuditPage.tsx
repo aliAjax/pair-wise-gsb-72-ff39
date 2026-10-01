@@ -38,6 +38,13 @@ const actionLabel: Record<string, string> = {
   unfrozen: '解冻',
   'rolled-back': '回滚',
   'rollout-adjusted': '调整灰度',
+  'batch-created': '批次创建',
+  'batch-confirmed': '批次确认',
+  'batch-applied': '批次发布',
+  'batch-halted': '批次停止',
+  'batch-retried': '批次重试',
+  'batch-superseded': '重复提交合并',
+  'batch-rolled-back': '整批回滚',
 }
 
 export function AuditPage() {
@@ -134,6 +141,18 @@ export function AuditPage() {
                       <Typography variant="caption" color="text.secondary">
                         {event.createdAt.slice(0, 16).replace('T', ' ')} · {event.actor}
                       </Typography>
+                      {event.batchId && (
+                        <Chip
+                          component={Link}
+                          to="/batches"
+                          clickable
+                          size="small"
+                          variant="outlined"
+                          color="primary"
+                          sx={{ mt: 0.5, height: 18, fontSize: 10 }}
+                          label={event.batchId}
+                        />
+                      )}
                     </TableCell>
                     <TableCell>
                       <Typography component={Link} to={`/flags/${event.flagId}`} variant="body2" fontWeight={700}>{event.flagKey}</Typography>

@@ -18,6 +18,7 @@ import ToggleOnOutlinedIcon from '@mui/icons-material/ToggleOnOutlined'
 import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined'
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined'
 import TimelineOutlinedIcon from '@mui/icons-material/TimelineOutlined'
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined'
 import AssessmentOutlinedIcon from '@mui/icons-material/AssessmentOutlined'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
@@ -30,6 +31,7 @@ const menuItems = [
   { path: '/review', label: '影响评审', icon: <FactCheckOutlinedIcon /> },
   { path: '/dependencies', label: '依赖关系', icon: <AccountTreeOutlinedIcon /> },
   { path: '/rollout', label: '灰度发布', icon: <TimelineOutlinedIcon /> },
+  { path: '/batches', label: '发布批次', icon: <Inventory2OutlinedIcon /> },
   { path: '/audit', label: '审计与回滚', icon: <HistoryOutlinedIcon /> },
   { path: '/reports', label: '发布报告', icon: <AssessmentOutlinedIcon /> },
 ]
@@ -40,6 +42,7 @@ const titleMap: Record<string, string> = {
   '/review': '发布影响评审',
   '/dependencies': '依赖与冲突分析',
   '/rollout': '灰度发布时间线',
+  '/batches': '多环境发布批次',
   '/audit': '审计与回滚',
   '/reports': '发布报告',
 }

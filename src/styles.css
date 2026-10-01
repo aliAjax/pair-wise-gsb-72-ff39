@@ -770,3 +770,94 @@ a:hover {
     grid-template-columns: minmax(180px, 0.7fr) minmax(120px, 0.7fr) minmax(220px, 1fr);
   }
 }
+
+.batch-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.baseline-editor {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.batch-card {
+  margin-bottom: 16px;
+}
+
+.batch-candidate-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.batch-candidate {
+  padding: 14px 16px;
+  border: 1px solid #e5e6eb;
+  border-left: 4px solid #c9cdd4;
+  border-radius: 7px;
+  background: #f7f8fa;
+}
+
+.batch-candidate.applied,
+.batch-candidate.rolled-back {
+  border-left-color: #00b42a;
+  background: #f6ffed;
+}
+
+.batch-candidate.failed {
+  border-left-color: #d92d20;
+  background: #fffafa;
+}
+
+.batch-candidate.invalidated {
+  border-left-color: #ff7d00;
+  background: #fffdf8;
+}
+
+.batch-candidate.pending {
+  border-left-color: #165dff;
+}
+
+.candidate-route {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: #e8f3ff;
+  color: #165dff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.snapshot-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.snapshot-grid > div {
+  padding: 8px 10px;
+  border: 1px solid #e5e6eb;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.snapshot-grid .MuiTypography-caption {
+  display: block;
+  color: #86909c;
+}
+
+.batch-meta {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}

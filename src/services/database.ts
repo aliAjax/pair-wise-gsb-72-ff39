@@ -1,17 +1,29 @@
 import type {
   AuditEvent,
   DashboardData,
+  Environment,
   FeatureFlag,
   ImpactIssue,
+  ReleaseBatch,
   ReviewPayload,
 } from '@/types'
+import { buildCandidateSnapshot } from '@/services/releaseBatchUtils'
 
-const STORAGE_KEY = 'feature-flag-release-console-v1'
+const STORAGE_KEY = 'feature-flag-release-console-v2'
 
 export interface Database {
   flags: FeatureFlag[]
   audit: AuditEvent[]
   issues: ImpactIssue[]
+  releaseBatches: ReleaseBatch[]
+  envBaselines: Record<Environment, string>
+  failNextWrite: boolean
+}
+
+const defaultEnvBaselines: Record<Environment, string> = {
+  dev: '9.3.0',
+  staging: '8.19.0',
+  production: '8.18.0',
 }
 
 const flags: FeatureFlag[] = [
@@ -221,6 +233,166 @@ const flags: FeatureFlag[] = [
     updatedAt: '2026-09-29T09:10:00+08:00',
     lastChangedBy: '沈宁',
   },
+  {
+    id: 'flag-109',
+    key: 'checkout.express-pay-v2',
+    name: '极速支付流程 V2',
+    description: '生产环境待发布记录：审批放行时沿用旧审核，需要发布批次重新固化受众与版本。',
+    owner: '陈思远',
+    team: '交易体验',
+    status: 'review',
+    environment: 'production',
+    enabled: false,
+    rolloutPercentage: 0,
+    audienceRules: [],
+    regions: ['CN-EAST', 'CN-NORTH', 'CN-SOUTH', 'CN-WEST'],
+    minClientVersion: { dev: '8.18.0', staging: '8.18.0', production: '8.12.0' },
+    dependencies: [{ flagId: 'flag-104', type: 'requires', condition: '支付聚合服务已启用' }],
+    rollbackConditions: ['支付成功率 5 分钟低于 96%', 'P95 延迟高于 2200ms', '错误率高于 1.2%'],
+    metricNames: ['checkout_payment_success_rate', 'checkout_p95_latency'],
+    deadCodeStatus: 'candidate',
+    rolloutSteps: [
+      { id: 's-109-1', percentage: 1, audience: '内部体验账号', startedAt: '2026-10-05T10:00:00+08:00', status: 'planned', guardrails: ['无阻断错误'] },
+    ],
+    createdAt: '2026-09-20T10:00:00+08:00',
+    updatedAt: '2026-09-26T15:00:00+08:00',
+    lastChangedBy: '林默',
+  },
+  {
+    id: 'flag-110',
+    key: 'infra.async-task-queue-v2',
+    name: '异步任务队列 V2',
+    description: '生产环境已回滚：高吞吐队列出现积压，账单导出批次的前置依赖不再满足。',
+    owner: '赵岚',
+    team: '基础架构',
+    status: 'rolled-back',
+    environment: 'production',
+    enabled: false,
+    rolloutPercentage: 0,
+    audienceRules: [],
+    regions: ['CN-EAST'],
+    minClientVersion: { dev: '1.0.0', staging: '1.0.0', production: '1.0.0' },
+    dependencies: [],
+    rollbackConditions: ['队列积压超过 10 万'],
+    metricNames: ['queue_backlog', 'task_failure_rate'],
+    deadCodeStatus: 'clean',
+    rolloutSteps: [{ id: 's-110-1', percentage: 40, audience: '生产长任务', startedAt: '2026-09-24T10:00:00+08:00', status: 'paused', guardrails: [] }],
+    createdAt: '2026-08-12T16:20:00+08:00',
+    updatedAt: '2026-09-29T07:30:00+08:00',
+    lastChangedBy: '赵岚',
+  },
+  {
+    id: 'flag-111',
+    key: 'console.billing-export-v3',
+    name: '账单异步导出 V3',
+    description: '预发环境已通过发布批次推进，生产候选因前置队列回滚整批停在预发之后。',
+    owner: '周航',
+    team: '云控制台',
+    status: 'active',
+    environment: 'staging',
+    enabled: true,
+    rolloutPercentage: 5,
+    audienceRules: [
+      { id: 'r-103-1', attribute: 'account.type', operator: 'equals', value: 'enterprise', negate: false },
+    ],
+    regions: ['CN-EAST'],
+    minClientVersion: { dev: '5.10.0', staging: '5.10.0', production: '5.10.0' },
+    dependencies: [{ flagId: 'flag-107', type: 'requires', condition: '异步任务队列容量已扩容' }],
+    rollbackConditions: ['任务失败率高于 3%', '导出文件超过 24 小时未生成'],
+    metricNames: ['billing_export_task_rate'],
+    deadCodeStatus: 'candidate',
+    rolloutSteps: [
+      { id: 's-301', percentage: 5, audience: '内部测试企业', startedAt: '2026-09-29T10:00:00+08:00', status: 'running', guardrails: ['任务成功率 > 98%'] },
+    ],
+    createdAt: '2026-09-29T10:05:00+08:00',
+    updatedAt: '2026-09-29T10:05:00+08:00',
+    lastChangedBy: '林默',
+  },
+  {
+    id: 'flag-112',
+    key: 'console.audit-export-v2',
+    name: '审计日志异步导出 V2',
+    description: '研发环境已放量 100%，准备通过发布批次向预发晋升。',
+    owner: '孟卓',
+    team: '云控制台',
+    status: 'active',
+    environment: 'dev',
+    enabled: true,
+    rolloutPercentage: 100,
+    audienceRules: [
+      { id: 'r-112-1', attribute: 'account.type', operator: 'in', value: 'enterprise,partner', negate: false },
+    ],
+    regions: ['CN-EAST', 'CN-NORTH'],
+    minClientVersion: { dev: '6.2.0', staging: '6.2.0', production: '6.0.0' },
+    dependencies: [],
+    rollbackConditions: ['导出任务失败率高于 2%'],
+    metricNames: ['audit_export_task_rate'],
+    deadCodeStatus: 'clean',
+    rolloutSteps: [
+      { id: 's-112-1', percentage: 20, audience: '内部账号', startedAt: '2026-09-22T10:00:00+08:00', status: 'completed', guardrails: ['无失败任务'] },
+      { id: 's-112-2', percentage: 100, audience: '研发全部企业账号', startedAt: '2026-09-26T10:00:00+08:00', status: 'completed', guardrails: ['任务失败率 < 2%'] },
+    ],
+    createdAt: '2026-09-15T11:00:00+08:00',
+    updatedAt: '2026-09-26T10:30:00+08:00',
+    lastChangedBy: '孟卓',
+  },
+  {
+    id: 'flag-113',
+    key: 'console.audit-export-v2',
+    name: '审计日志异步导出 V2',
+    description: '预发环境记录，由发布批次 batch-3 晋升。',
+    owner: '孟卓',
+    team: '云控制台',
+    status: 'active',
+    environment: 'staging',
+    enabled: true,
+    rolloutPercentage: 100,
+    audienceRules: [
+      { id: 'r-112-1', attribute: 'account.type', operator: 'in', value: 'enterprise,partner', negate: false },
+    ],
+    regions: ['CN-EAST', 'CN-NORTH'],
+    minClientVersion: { dev: '6.2.0', staging: '6.2.0', production: '6.0.0' },
+    dependencies: [],
+    rollbackConditions: ['导出任务失败率高于 2%'],
+    metricNames: ['audit_export_task_rate'],
+    deadCodeStatus: 'clean',
+    rolloutSteps: [
+      { id: 's-112-1', percentage: 20, audience: '内部账号', startedAt: '2026-09-22T10:00:00+08:00', status: 'completed', guardrails: ['无失败任务'] },
+      { id: 's-112-2', percentage: 100, audience: '研发全部企业账号', startedAt: '2026-09-26T10:00:00+08:00', status: 'completed', guardrails: ['任务失败率 < 2%'] },
+    ],
+    createdAt: '2026-09-29T14:10:00+08:00',
+    updatedAt: '2026-09-29T14:10:00+08:00',
+    lastChangedBy: '林默',
+  },
+  {
+    id: 'flag-114',
+    key: 'security.admin-session-guard',
+    name: '管理员会话加固',
+    description: '预发验证通过，生产在线客户端基线尚未覆盖要求的最低版本，待发布批次确认。',
+    owner: '韩秋',
+    team: '安全平台',
+    status: 'active',
+    environment: 'staging',
+    enabled: true,
+    rolloutPercentage: 50,
+    audienceRules: [
+      { id: 'r-114-1', attribute: 'operator.role', operator: 'equals', value: 'admin', negate: false },
+      { id: 'r-114-2', attribute: 'app.version', operator: 'gte', value: '9.4.0', negate: false },
+    ],
+    regions: ['CN-EAST', 'CN-NORTH', 'CN-SOUTH', 'CN-WEST'],
+    minClientVersion: { dev: '9.4.0', staging: '9.4.0', production: '9.4.0' },
+    dependencies: [],
+    rollbackConditions: ['管理员登录失败率高于 1%', '会话校验 P99 超过 400ms'],
+    metricNames: ['admin_login_success_rate', 'session_check_latency'],
+    deadCodeStatus: 'clean',
+    rolloutSteps: [
+      { id: 's-114-1', percentage: 10, audience: '安全团队管理员', startedAt: '2026-09-24T10:00:00+08:00', status: 'completed', guardrails: ['无异常登录'] },
+      { id: 's-114-2', percentage: 50, audience: '预发全部管理员', startedAt: '2026-09-28T10:00:00+08:00', status: 'running', guardrails: ['P99 < 400ms'] },
+    ],
+    createdAt: '2026-09-18T09:00:00+08:00',
+    updatedAt: '2026-09-29T11:20:00+08:00',
+    lastChangedBy: '韩秋',
+  },
 ]
 
 const issues: ImpactIssue[] = [
@@ -365,9 +537,164 @@ const audit: AuditEvent[] = [
     affectedUsers: 3200000,
     createdAt: '2026-09-25T12:30:00+08:00',
   },
+  {
+    id: 'audit-7',
+    flagId: 'flag-111',
+    flagKey: 'console.billing-export-v3',
+    batchId: 'batch-2',
+    action: 'batch-applied',
+    actor: '林默',
+    summary: '发布批次写入预发环境候选，账单异步导出 V3 在预发放量 5%。',
+    before: '预发无记录',
+    after: 'active / 5%',
+    affectedUsers: 120,
+    createdAt: '2026-09-29T10:05:00+08:00',
+  },
+  {
+    id: 'audit-8',
+    flagId: 'flag-103',
+    flagKey: 'console.billing-export-v3',
+    batchId: 'batch-2',
+    action: 'batch-halted',
+    actor: '系统',
+    summary: '前置依赖 infra.async-task-queue-v2 在生产环境已回滚，整批停止，未完成的生产候选保留待重试。',
+    before: 'confirmed',
+    after: 'halted',
+    affectedUsers: 0,
+    createdAt: '2026-09-29T10:06:00+08:00',
+  },
+  {
+    id: 'audit-9',
+    flagId: 'flag-113',
+    flagKey: 'console.audit-export-v2',
+    batchId: 'batch-3',
+    action: 'batch-applied',
+    actor: '林默',
+    summary: '发布批次写入预发环境候选，审计日志异步导出 V2 已在预发全量。',
+    before: '预发无记录',
+    after: 'active / 100%',
+    affectedUsers: 900,
+    createdAt: '2026-09-29T14:10:00+08:00',
+  },
 ]
 
-export const seedDatabase = (): Database => ({ flags, audit, issues })
+const flagById = (id: string): FeatureFlag => {
+  const flag = flags.find((item) => item.id === id)
+  if (!flag) throw new Error(`种子开关 ${id} 不存在`)
+  return flag
+}
+
+const releaseBatches: ReleaseBatch[] = [
+  {
+    id: 'batch-1',
+    flagId: 'flag-101',
+    flagKey: 'checkout.express-pay-v2',
+    flagName: '极速支付流程 V2',
+    status: 'draft',
+    createdBy: '陈思远',
+    createdAt: '2026-09-29T09:20:00+08:00',
+    note: '预发审批通过后准备晋升生产，候选尚未确认。',
+    candidates: [
+      {
+        id: 'batch-1-cand-production',
+        sourceEnvironment: 'staging',
+        targetEnvironment: 'production',
+        status: 'pending',
+        targetFlagId: 'flag-109',
+        snapshot: buildCandidateSnapshot(flagById('flag-101')),
+      },
+    ],
+  },
+  {
+    id: 'batch-2',
+    flagId: 'flag-103',
+    flagKey: 'console.billing-export-v3',
+    flagName: '账单异步导出 V3',
+    status: 'halted',
+    createdBy: '周航',
+    createdAt: '2026-09-29T09:50:00+08:00',
+    confirmedAt: '2026-09-29T09:55:00+08:00',
+    confirmedBy: '林默',
+    appliedAt: '2026-09-29T10:05:00+08:00',
+    haltedAt: '2026-09-29T10:06:00+08:00',
+    note: '预发已写入，生产候选因前置依赖回滚整批停止。',
+    candidates: [
+      {
+        id: 'batch-2-cand-staging',
+        sourceEnvironment: 'dev',
+        targetEnvironment: 'staging',
+        status: 'applied',
+        targetFlagId: 'flag-111',
+        appliedAt: '2026-09-29T10:05:00+08:00',
+        restorePoint: { audienceRules: [], dependencies: [], rolloutSteps: [], targetExisted: false },
+        snapshot: buildCandidateSnapshot(flagById('flag-111')),
+      },
+      {
+        id: 'batch-2-cand-production',
+        sourceEnvironment: 'dev',
+        targetEnvironment: 'production',
+        status: 'pending',
+        targetFlagId: 'flag-103-production',
+        snapshot: buildCandidateSnapshot(flagById('flag-103')),
+      },
+    ],
+  },
+  {
+    id: 'batch-3',
+    flagId: 'flag-112',
+    flagKey: 'console.audit-export-v2',
+    flagName: '审计日志异步导出 V2',
+    status: 'applied',
+    createdBy: '孟卓',
+    createdAt: '2026-09-29T13:40:00+08:00',
+    confirmedAt: '2026-09-29T14:00:00+08:00',
+    confirmedBy: '林默',
+    appliedAt: '2026-09-29T14:10:00+08:00',
+    candidates: [
+      {
+        id: 'batch-3-cand-staging',
+        sourceEnvironment: 'dev',
+        targetEnvironment: 'staging',
+        status: 'applied',
+        targetFlagId: 'flag-113',
+        appliedAt: '2026-09-29T14:10:00+08:00',
+        restorePoint: { audienceRules: [], dependencies: [], rolloutSteps: [], targetExisted: false },
+        snapshot: buildCandidateSnapshot(flagById('flag-112')),
+      },
+    ],
+  },
+  {
+    id: 'batch-4',
+    flagId: 'flag-114',
+    flagKey: 'security.admin-session-guard',
+    flagName: '管理员会话加固',
+    status: 'confirmed',
+    createdBy: '韩秋',
+    createdAt: '2026-09-30T16:20:00+08:00',
+    confirmedAt: '2026-09-30T17:00:00+08:00',
+    confirmedBy: '林默',
+    note: '生产在线客户端基线仍为 8.18.0，候选要求 9.4.0，执行会因版本不满足整批停止。',
+    candidates: [
+      {
+        id: 'batch-4-cand-production',
+        sourceEnvironment: 'staging',
+        targetEnvironment: 'production',
+        status: 'pending',
+        targetFlagId: 'flag-114-production',
+        snapshot: buildCandidateSnapshot(flagById('flag-114')),
+      },
+    ],
+  },
+]
+
+export const seedDatabase = (): Database => ({
+  flags,
+  audit,
+  issues,
+  releaseBatches,
+  envBaselines: defaultEnvBaselines,
+  failNextWrite: false,
+})
 
 export const readDatabase = (): Database => {
   const raw = localStorage.getItem(STORAGE_KEY)
@@ -377,7 +704,15 @@ export const readDatabase = (): Database => {
     return seed
   }
   try {
-    return JSON.parse(raw) as Database
+    const parsed = JSON.parse(raw) as Partial<Database>
+    return {
+      flags: parsed.flags ?? flags,
+      audit: parsed.audit ?? audit,
+      issues: parsed.issues ?? issues,
+      releaseBatches: parsed.releaseBatches ?? releaseBatches,
+      envBaselines: parsed.envBaselines ?? defaultEnvBaselines,
+      failNextWrite: false,
+    }
   } catch {
     const seed = seedDatabase()
     writeDatabase(seed)
@@ -386,6 +721,10 @@ export const readDatabase = (): Database => {
 }
 
 export const writeDatabase = (database: Database): void => {
+  if (database.failNextWrite) {
+    // 模拟目标环境写入失败：不落盘任何变更，调用方需丢弃内存态后从已保留状态重试。
+    throw new Error('目标环境配置服务暂时不可用，写入失败')
+  }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(database))
 }
 
